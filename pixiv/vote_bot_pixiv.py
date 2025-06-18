@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -22,6 +22,7 @@ dp = Dispatcher(storage=storage)
 # Хранилище пользовательских сессий
 users_data = {}
 
+
 @dp.message(Command("choose_file"))
 async def choose_file(message: types.Message):
     files = [f for f in os.listdir(DATA_DIR) if f.endswith('.json')]
@@ -36,9 +37,10 @@ async def choose_file(message: types.Message):
     )
     await message.answer("Выберите файл для работы:", reply_markup=keyboard)
 
+
 @dp.callback_query(lambda c: c.data.startswith("choosefile_"))
 async def process_file_choice(callback: types.CallbackQuery, state: FSMContext):
-    file_path = callback.data[len("choosefile_") :]
+    file_path = callback.data[len("choosefile_"):]
     full_json_path = os.path.join(DATA_DIR, file_path)
     try:
         with open(full_json_path, "r", encoding="utf-8") as f:
@@ -58,13 +60,15 @@ async def process_file_choice(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer(f"Файл {file_path} выбран")
     await send_artwork(callback.message, user_id)
 
+
 async def send_artwork(message, user_id):
     data = users_data[user_id]
     idx = data["index"]
     artworks = data["artworks"]
 
     if idx >= len(artworks):
-        await message.answer("Вы просмотрели все арты в этом файле! Для начала заново — выберите файл командой /choose_file")
+        await message.answer(
+            "Вы просмотрели все арты в этом файле! Для начала заново — выберите файл командой /choose_file")
         return
 
     art = artworks[idx]
@@ -75,13 +79,13 @@ async def send_artwork(message, user_id):
         f"<b>Tags:</b> {', '.join(art['tags'])}\n"
         f"<b>Bookmarks:</b> {art['total_bookmarks']}\n"
         f"<b>Views:</b> {art['total_view']}\n"
-        f"<b>Status:</b> <b>{idx+1}/{len(artworks)}</b>"
+        f"<b>Status:</b> <b>{idx + 1}/{len(artworks)}</b>"
     )
 
     image_url = art.get("image_urls", {}).get("original") \
-        or art.get("image_urls", {}).get("large") \
-        or art.get("image_urls", {}).get("medium") \
-        or art.get("image_urls", {}).get("square_medium")
+                or art.get("image_urls", {}).get("large") \
+                or art.get("image_urls", {}).get("medium") \
+                or art.get("image_urls", {}).get("square_medium")
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -103,6 +107,7 @@ async def send_artwork(message, user_id):
     except Exception as e:
         await message.answer(f"Ошибка при отправке изображения: {e}\n{caption}", reply_markup=keyboard)
 
+
 @dp.message(Command("start"))
 @dp.message(Command("next"))
 async def next_art(message: types.Message):
@@ -111,6 +116,7 @@ async def next_art(message: types.Message):
         await message.answer("Сначала выберите файл с помощью /choose_file")
         return
     await send_artwork(message, user_id)
+
 
 @dp.callback_query(lambda c: c.data.startswith("vote_"))
 async def vote_callback(callback: types.CallbackQuery):
@@ -134,9 +140,55 @@ async def vote_callback(callback: types.CallbackQuery):
     await callback.answer(f"Голос '{vote}' записан!")
     await send_artwork(callback.message, user_id)
 
+    # --- Загрузка нового JSON файла ---
+    @dp.message(Command("upload_json"))
+    async def upload_json(message: types.Message, state: FSMContext):
+        await message.answer("Пришлите JSON-файл в виде документа.")
+        await state.set_state("waiting_for_json")
+
+    @dp.message(lambda msg, state=None: state and state.get_state() == "waiting_for_json",
+                flags={"content_types": ["document"]})
+    async def process_upload_json(message: types.Message, state: FSMContext):
+        document = message.document
+        if not document.file_name.endswith('.json'):
+            await message.answer("Файл должен быть с расширением .json!")
+            return
+        file_path = os.path.join(DATA_DIR, document.file_name)
+        await bot.download(document, destination=file_path)
+        await message.answer(f"Файл {document.file_name} успешно загружен в папку data.")
+        await state.clear()
+
+    # --- Выгрузка любого доступного CSV файла ---
+    @dp.message(Command("get_csv"))
+    async def get_csv(message: types.Message):
+        files = [f for f in os.listdir(DATA_DIR) if f.endswith('.csv')]
+        if not files:
+            await message.answer("В папке data нет CSV файлов.")
+            return
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=f, callback_data=f"sendcsv_{f}")]
+                for f in files
+            ]
+        )
+        await message.answer("Выберите CSV-файл для скачивания:", reply_markup=keyboard)
+
+    @dp.callback_query(lambda c: c.data.startswith("sendcsv_"))
+    async def send_csv(callback: types.CallbackQuery):
+        file_name = callback.data[len("sendcsv_"):]
+        file_path = os.path.join(DATA_DIR, file_name)
+        if not os.path.exists(file_path):
+            await callback.message.answer("Файл не найден.")
+            return
+        doc = FSInputFile(file_path)
+        await bot.send_document(callback.message.chat.id, doc)
+        await callback.answer("Файл отправлен!")
+
+
 async def main():
     print("Бот запущен!")
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
