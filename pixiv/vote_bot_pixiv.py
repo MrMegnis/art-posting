@@ -13,6 +13,8 @@ load_dotenv()
 
 API_TOKEN = os.getenv('API_TOKEN')
 
+DATA_DIR = "data"
+
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
@@ -22,9 +24,9 @@ users_data = {}
 
 @dp.message(Command("choose_file"))
 async def choose_file(message: types.Message):
-    files = [f for f in os.listdir('.') if f.endswith('.json')]
+    files = [f for f in os.listdir(DATA_DIR) if f.endswith('.json')]
     if not files:
-        await message.answer("В этой папке нет JSON файлов.")
+        await message.answer("В папке data нет JSON файлов.")
         return
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -37,19 +39,21 @@ async def choose_file(message: types.Message):
 @dp.callback_query(lambda c: c.data.startswith("choosefile_"))
 async def process_file_choice(callback: types.CallbackQuery, state: FSMContext):
     file_path = callback.data[len("choosefile_") :]
+    full_json_path = os.path.join(DATA_DIR, file_path)
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(full_json_path, "r", encoding="utf-8") as f:
             artworks = json.load(f)
     except Exception as e:
         await callback.message.answer(f"Ошибка открытия файла: {e}")
         return
 
     user_id = callback.from_user.id
+    csv_file_path = os.path.join(DATA_DIR, f"{file_path}_votes.csv")
     users_data[user_id] = {
         "artworks": artworks,
         "index": 0,
         "file": file_path,
-        "csv_file": f"{file_path}_votes.csv"
+        "csv_file": csv_file_path
     }
     await callback.answer(f"Файл {file_path} выбран")
     await send_artwork(callback.message, user_id)

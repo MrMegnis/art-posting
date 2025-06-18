@@ -49,4 +49,4 @@ def parse_pixiv(query='', tags=None, max_results=50, output_file='pixiv_data.jso
     print(f"Saved {len(result)} artworks to {output_file}")
 
 if __name__ == "__main__":
-    parse_pixiv(tags=["雷電将軍"], max_results=1000, output_file='raiden.json', refresh_token='bcUSLH30_xqfPe5VwMkk2nH82JIJig9_q0d6rbCYo5U')
+    parse_pixiv(tags=["雷電将軍"], max_results=1000, output_file='data/raiden.json', refresh_token='bcUSLH30_xqfPe5VwMkk2nH82JIJig9_q0d6rbCYo5U')
