@@ -5,9 +5,12 @@ from dotenv import load_dotenv
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram import F
+from aiogram.types import Document
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.state import State, StatesGroup
 
 load_dotenv()
 
@@ -17,6 +20,9 @@ API_TOKEN = os.getenv('API_TOKEN')
 SECRET_AUTH_PASS = os.getenv('SECRET')
 
 DATA_DIR = "data"
+
+class UploadStates(StatesGroup):
+    waiting_for_json = State()
 
 def load_allowed_users():
     if not os.path.exists(ALLOWED_USERS_FILE):
@@ -197,10 +203,9 @@ async def vote_callback(callback: types.CallbackQuery, **kwargs):
 @is_allowed_user
 async def upload_json(message: types.Message, state: FSMContext, **kwargs):
     await message.answer("Пришлите JSON-файл в виде документа.")
-    await state.set_state("waiting_for_json")
+    await state.set_state(UploadStates.waiting_for_json)
 
-@dp.message(lambda msg, state=None: state and state.get_state() == "waiting_for_json",
-            flags={"content_types": ["document"]})
+@dp.message(UploadStates.waiting_for_json, F.document)
 @is_allowed_user
 async def process_upload_json(message: types.Message, state: FSMContext, **kwargs):
     document = message.document
