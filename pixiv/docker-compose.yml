@@ -5,7 +5,7 @@ services:
     container_name: pixiv_vote_bot
     volumes:
       - ./data:/app/data
-      - ./vote_bot_pixiv.py:/app/vote_bot_pixiv.py
+      - ./:/app/
     env_file:
       - .env
     environment:
